@@ -1,36 +1,143 @@
 // src/screens/JobDetailScreen.js
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../Database/firebaseConfig';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { auth, db } from '../Database/firebaseConfig';
+import { formatPrice } from '../constants/nicaraguaConstants';
+
+const { width } = Dimensions.get('window');
 
 export default function JobDetailScreen({ route, navigation }) {
     const { job } = route.params;
+    const [jobData, setJobData] = useState(job);
+    const [isOwner, setIsOwner] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const currentUser = auth.currentUser;
+
+    useEffect(() => {
+        setIsOwner(job.userId === currentUser?.uid);
+    }, []);
 
     const formatDate = (timestamp) => {
         if (!timestamp) return '';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleDateString('es-ES', {
+        return date.toLocaleDateString('es-NI', {
             day: 'numeric',
             month: 'long',
             year: 'numeric'
         });
     };
 
-    const handleContact = () => {
-        if (job.userId === auth.currentUser?.uid) {
+    const handleContact = async () => {
+        if (job.userId === currentUser?.uid) {
             Alert.alert('Aviso', 'No puedes contactarte contigo mismo');
             return;
         }
+
+        try {
+            setLoading(true);
+
+            // Verificar si ya existe una conversación
+            const q = query(
+                collection(db, 'conversations'),
+                where('jobId', '==', job.id),
+                where('participants', 'array-contains', currentUser.uid)
+            );
+
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                // Ya existe conversación, ir a ella
+                const conversationData = querySnapshot.docs[0];
+                navigation.navigate('Chat', {
+                    conversationId: conversationData.id,
+                    jobTitle: job.title,
+                    otherUserName: job.userName,
+                    jobId: job.id
+                });
+            } else {
+                // Crear nueva conversación
+                const conversationRef = await addDoc(collection(db, 'conversations'), {
+                    jobId: job.id,
+                    jobTitle: job.title,
+                    participants: [currentUser.uid, job.userId],
+                    [`user_${currentUser.uid}_name`]: currentUser.displayName || 'Usuario',
+                    [`user_${job.userId}_name`]: job.userName,
+                    lastMessage: '',
+                    lastMessageAt: serverTimestamp(),
+                    createdAt: serverTimestamp(),
+                    hired: false
+                });
+
+                navigation.navigate('Chat', {
+                    conversationId: conversationRef.id,
+                    jobTitle: job.title,
+                    otherUserName: job.userName,
+                    jobId: job.id
+                });
+            }
+        } catch (error) {
+            console.error('Error creating conversation:', error);
+            Alert.alert('Error', 'No se pudo iniciar la conversación');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleHire = async (workerId, workerName) => {
         Alert.alert(
-            'Contactar',
-            '¿Deseas contactar a este usuario?',
+            'Contratar trabajador',
+            `¿Deseas contratar a ${workerName} para este trabajo?`,
             [
                 { text: 'Cancelar', style: 'cancel' },
                 {
-                    text: 'Contactar', onPress: () => {
-                        // Aquí implementarías la funcionalidad de mensajería
-                        Alert.alert('Funcionalidad en desarrollo', 'Pronto podrás enviar mensajes');
+                    text: 'Contratar',
+                    onPress: async () => {
+                        try {
+                            await updateDoc(doc(db, 'jobs', job.id), {
+                                status: 'in-progress',
+                                hiredWorkerId: workerId,
+                                hiredWorkerName: workerName,
+                                hiredAt: serverTimestamp()
+                            });
+                            Alert.alert('Éxito', 'Trabajador contratado exitosamente');
+                            navigation.goBack();
+                        } catch (error) {
+                            console.error('Error hiring worker:', error);
+                            Alert.alert('Error', 'No se pudo contratar al trabajador');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleMarkCompleted = async () => {
+        Alert.alert(
+            'Completar trabajo',
+            '¿El trabajo ha sido completado?',
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Completar',
+                    onPress: async () => {
+                        try {
+                            await updateDoc(doc(db, 'jobs', job.id), {
+                                status: 'completed',
+                                completedAt: serverTimestamp()
+                            });
+                            Alert.alert('Éxito', 'Trabajo marcado como completado. Ahora puedes calificar al trabajador.');
+                            navigation.navigate('RateWorker', {
+                                jobId: job.id,
+                                workerId: jobData.hiredWorkerId,
+                                workerName: jobData.hiredWorkerName,
+                                jobTitle: job.title
+                            });
+                        } catch (error) {
+                            console.error('Error completing job:', error);
+                            Alert.alert('Error', 'No se pudo completar el trabajo');
+                        }
                     }
                 }
             ]
@@ -69,18 +176,25 @@ export default function JobDetailScreen({ route, navigation }) {
                             <View style={styles.ratingContainer}>
                                 <Ionicons name="star" size={16} color="#FFA500" />
                                 <Text style={styles.rating}>{job.userRating.toFixed(1)}</Text>
-                                <Text style={styles.jobsCount}>• {job.userJobsCompleted || 12} trabajos</Text>
+                                <Text style={styles.jobsCount}>• {job.userJobsCompleted || 0} trabajos</Text>
                             </View>
                         )}
                     </View>
                 </View>
 
                 <Text style={styles.title}>{job.title}</Text>
-                <Text style={styles.price}>C$ {job.price.toLocaleString()}</Text>
+                <Text style={styles.price}>{formatPrice(job.price)}</Text>
 
                 <View style={styles.infoRow}>
                     <Ionicons name="location" size={20} color="#0066CC" />
                     <Text style={styles.infoText}>{job.location}</Text>
+                </View>
+
+                <View style={styles.statusBadge}>
+                    <Text style={styles.statusText}>
+                        {job.status === 'active' ? '🟢 Disponible' :
+                            job.status === 'in-progress' ? '🟡 En proceso' : '✅ Completado'}
+                    </Text>
                 </View>
 
                 <View style={styles.categoryBadge}>
@@ -96,9 +210,9 @@ export default function JobDetailScreen({ route, navigation }) {
                     <Text style={styles.sectionTitle}>Detalles adicionales</Text>
 
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Tipo de trabajo</Text>
+                        <Text style={styles.detailLabel}>Fecha de publicación</Text>
                         <Text style={styles.detailValue}>
-                            {job.jobType === 'one-time' ? 'Puntual' : 'Recurrente'}
+                            {formatDate(job.createdAt)}
                         </Text>
                     </View>
 
@@ -109,43 +223,44 @@ export default function JobDetailScreen({ route, navigation }) {
                         </Text>
                     </View>
 
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Disponibilidad</Text>
-                        <Text style={styles.detailValueAvailable}>Disponible</Text>
-                    </View>
+                    {job.status === 'in-progress' && job.hiredWorkerName && (
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Trabajador contratado</Text>
+                            <Text style={styles.detailValueSuccess}>{job.hiredWorkerName}</Text>
+                        </View>
+                    )}
                 </View>
-
-                {job.reviews && job.reviews.length > 0 && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Calificaciones del publicador</Text>
-                        {job.reviews.slice(0, 2).map((review, index) => (
-                            <View key={index} style={styles.reviewCard}>
-                                <View style={styles.reviewHeader}>
-                                    <Text style={styles.reviewAuthor}>{review.author}</Text>
-                                    <View style={styles.reviewRating}>
-                                        {[...Array(5)].map((_, i) => (
-                                            <Ionicons
-                                                key={i}
-                                                name="star"
-                                                size={12}
-                                                color={i < review.rating ? '#FFA500' : '#E0E0E0'}
-                                            />
-                                        ))}
-                                    </View>
-                                </View>
-                                <Text style={styles.reviewText}>{review.text}</Text>
-                                <Text style={styles.reviewDate}>{review.date}</Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
             </ScrollView>
 
             <View style={styles.footer}>
-                <TouchableOpacity style={styles.contactButton} onPress={handleContact}>
-                    <Ionicons name="chatbubble-outline" size={20} color="white" />
-                    <Text style={styles.contactButtonText}>Contactar</Text>
-                </TouchableOpacity>
+                {!isOwner && job.status === 'active' && (
+                    <TouchableOpacity
+                        style={styles.contactButton}
+                        onPress={handleContact}
+                        disabled={loading}
+                    >
+                        <Ionicons name="chatbubble-outline" size={20} color="white" />
+                        <Text style={styles.contactButtonText}>
+                            {loading ? 'Cargando...' : 'Contactar'}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {isOwner && job.status === 'active' && (
+                    <Text style={styles.ownerMessage}>
+                        Esperando postulantes para este trabajo
+                    </Text>
+                )}
+
+                {isOwner && job.status === 'in-progress' && (
+                    <TouchableOpacity
+                        style={styles.completeButton}
+                        onPress={handleMarkCompleted}
+                    >
+                        <Ionicons name="checkmark-circle-outline" size={20} color="white" />
+                        <Text style={styles.contactButtonText}>Marcar como completado</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </View>
     );
@@ -246,6 +361,20 @@ const styles = StyleSheet.create({
         color: '#666',
         marginLeft: 8,
     },
+    statusBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#E8F5E9',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginLeft: 16,
+        marginBottom: 12,
+    },
+    statusText: {
+        fontSize: 14,
+        color: '#2E7D32',
+        fontWeight: '600',
+    },
     categoryBadge: {
         alignSelf: 'flex-start',
         backgroundColor: '#F0F0F0',
@@ -293,40 +422,10 @@ const styles = StyleSheet.create({
         color: '#333',
         fontWeight: '500',
     },
-    detailValueAvailable: {
+    detailValueSuccess: {
         fontSize: 15,
         color: '#00C853',
         fontWeight: '600',
-    },
-    reviewCard: {
-        backgroundColor: '#F8F9FA',
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 12,
-    },
-    reviewHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    reviewAuthor: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#333',
-    },
-    reviewRating: {
-        flexDirection: 'row',
-    },
-    reviewText: {
-        fontSize: 14,
-        color: '#666',
-        lineHeight: 20,
-        marginBottom: 4,
-    },
-    reviewDate: {
-        fontSize: 12,
-        color: '#999',
     },
     footer: {
         padding: 16,
@@ -341,10 +440,24 @@ const styles = StyleSheet.create({
         padding: 16,
         borderRadius: 12,
     },
+    completeButton: {
+        backgroundColor: '#00C853',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        borderRadius: 12,
+    },
     contactButtonText: {
         color: 'white',
         fontSize: 16,
         fontWeight: 'bold',
         marginLeft: 8,
+    },
+    ownerMessage: {
+        textAlign: 'center',
+        color: '#666',
+        fontSize: 14,
+        fontStyle: 'italic',
     },
 });

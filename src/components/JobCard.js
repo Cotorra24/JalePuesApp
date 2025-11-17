@@ -2,8 +2,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { formatPrice } from '../constants/nicaraguaConstants';
 
-export default function JobCard({ job, onPress }) {
+export default function JobCard({ job, onPress, isRecommended }) {
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
     

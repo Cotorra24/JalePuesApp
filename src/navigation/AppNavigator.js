@@ -16,6 +16,10 @@ import PublishJobScreen from '../screens/PublishJobScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import MyPostsScreen from '../screens/MyPostsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ConversationsScreen from '../screens/ConversationsScreen';
+import ChatScreen from '../screens/ChatScreen';
+import RateWorkerScreen from '../screens/RateWorkerScreen';
+import StatisticsScreen from '../screens/StatisticsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -47,7 +51,7 @@ function HomeTabs() {
       <Tab.Screen name="Inicio" component={HomeScreen} />
       <Tab.Screen name="Buscar" component={HomeScreen} />
       <Tab.Screen name="Publicar" component={PublishJobScreen} />
-      <Tab.Screen name="Mensajes" component={HomeScreen} />
+      <Tab.Screen name="Mensajes" component={ConversationsScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -86,8 +90,11 @@ export default function AppNavigator() {
         <>
           <Stack.Screen name="HomeTabs" component={HomeTabs} />
           <Stack.Screen name="JobDetail" component={JobDetailScreen} />
+          <Stack.Screen name="Chat" component={ChatScreen} />
+          <Stack.Screen name="RateWorker" component={RateWorkerScreen} />
           <Stack.Screen name="MyPosts" component={MyPostsScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Statistics" component={StatisticsScreen} />
         </>
       )}
     </Stack.Navigator>

@@ -5,6 +5,7 @@ import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../Database/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
+import { CATEGORIES, PHONE_CONFIG } from '../constants/nicaraguaConstants';
 
 export default function RegisterScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
@@ -12,9 +13,18 @@ export default function RegisterScreen({ navigation }) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const toggleCategory = (category) => {
+    if (selectedCategories.includes(category)) {
+      setSelectedCategories(selectedCategories.filter(c => c !== category));
+    } else {
+      setSelectedCategories([...selectedCategories, category]);
+    }
+  };
 
   const handleRegister = async () => {
     if (!fullName || !email || !phone || !password || !confirmPassword) {
@@ -22,8 +32,13 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
-    if (password.length < 8) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 8 caracteres');
+    if (selectedCategories.length === 0) {
+      Alert.alert('Error', 'Por favor selecciona al menos una categoría de interés');
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
       return;
     }
 
@@ -45,13 +60,16 @@ export default function RegisterScreen({ navigation }) {
         fullName,
         email,
         phone,
-        createdAt: new Date().toISOString(),
+        categories: selectedCategories,
         rating: 0,
         completedJobs: 0,
         activePublications: 0,
+        createdAt: new Date().toISOString(),
+        photoURL: null,
+        bio: '',
       });
 
-      Alert.alert('Éxito', 'Cuenta creada exitosamente');
+      Alert.alert('Éxito', '¡Cuenta creada exitosamente!');
     } catch (error) {
       let errorMessage = 'Error al crear la cuenta';
       if (error.code === 'auth/email-already-in-use') {
@@ -68,12 +86,12 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView showsVerticalScrollIndicator={false}>
-        <TouchableOpacity
+        <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
@@ -90,7 +108,7 @@ export default function RegisterScreen({ navigation }) {
           <Text style={styles.label}>Nombre completo</Text>
           <TextInput
             style={styles.input}
-            placeholder="Nombre"
+            placeholder="Juan Pérez"
             value={fullName}
             onChangeText={setFullName}
           />
@@ -106,28 +124,61 @@ export default function RegisterScreen({ navigation }) {
           />
 
           <Text style={styles.label}>Teléfono</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="+505 "
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-          />
+          <View style={styles.phoneContainer}>
+            <Text style={styles.phonePrefix}>{PHONE_CONFIG.countryCode}</Text>
+            <TextInput
+              style={styles.phoneInput}
+              placeholder={PHONE_CONFIG.placeholder}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              maxLength={9}
+            />
+          </View>
+
+          <Text style={styles.label}>Categorías de interés*</Text>
+          <Text style={styles.hint}>
+            Selecciona en qué te especializas o qué trabajos te interesan
+          </Text>
+          <View style={styles.categoriesContainer}>
+            {CATEGORIES.map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={[
+                  styles.categoryChip,
+                  selectedCategories.includes(category) && styles.categoryChipSelected
+                ]}
+                onPress={() => toggleCategory(category)}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    selectedCategories.includes(category) && styles.categoryChipTextSelected
+                  ]}
+                >
+                  {category}
+                </Text>
+                {selectedCategories.includes(category) && (
+                  <Ionicons name="checkmark-circle" size={16} color="#0066CC" style={styles.checkIcon} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <Text style={styles.label}>Contraseña</Text>
           <View style={styles.passwordContainer}>
             <TextInput
               style={styles.passwordInput}
-              placeholder="Mínimo 8 caracteres"
+              placeholder="Mínimo 6 caracteres"
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Ionicons
-                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                size={24}
-                color="#666"
+              <Ionicons 
+                name={showPassword ? 'eye-outline' : 'eye-off-outline'} 
+                size={24} 
+                color="#666" 
               />
             </TouchableOpacity>
           </View>
@@ -142,16 +193,16 @@ export default function RegisterScreen({ navigation }) {
               secureTextEntry={!showConfirmPassword}
             />
             <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-              <Ionicons
-                name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
-                size={24}
-                color="#666"
+              <Ionicons 
+                name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} 
+                size={24} 
+                color="#666" 
               />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
             onPress={handleRegister}
             disabled={loading}
           >
@@ -210,13 +261,66 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
+    marginTop: 12,
+  },
+  hint: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 12,
+    fontStyle: 'italic',
   },
   input: {
     backgroundColor: '#F5F5F5',
     padding: 15,
     borderRadius: 10,
     fontSize: 16,
-    marginBottom: 20,
+  },
+  phoneContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    paddingLeft: 15,
+  },
+  phonePrefix: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginRight: 5,
+  },
+  phoneInput: {
+    flex: 1,
+    padding: 15,
+    fontSize: 16,
+  },
+  categoriesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryChipSelected: {
+    backgroundColor: '#E3F2FD',
+    borderWidth: 1,
+    borderColor: '#0066CC',
+  },
+  categoryChipText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  categoryChipTextSelected: {
+    color: '#0066CC',
+    fontWeight: '600',
+  },
+  checkIcon: {
+    marginLeft: 6,
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -224,7 +328,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     borderRadius: 10,
     paddingRight: 15,
-    marginBottom: 20,
   },
   passwordInput: {
     flex: 1,
@@ -236,7 +339,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 30,
   },
   buttonDisabled: {
     backgroundColor: '#ccc',

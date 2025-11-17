@@ -6,31 +6,7 @@ import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'fir
 import { auth, db } from '../Database/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-
-const categories = [
-  'Plomería',
-  'Electricidad',
-  'Limpieza',
-  'Jardinería',
-  'Carpintería',
-  'Pintura',
-  'Mudanza',
-  'Tecnología',
-  'Otros'
-];
-
-const locations = [
-  'San José Centro',
-  'Escazú',
-  'Santa Ana',
-  'Curridabat',
-  'Desamparados',
-  'Guadalupe',
-  'Moravia',
-  'Heredia',
-  'Alajuela',
-  'Cartago'
-];
+import { CATEGORIES, LOCATIONS } from '../constants/nicaraguaConstants';
 
 export default function PublishJobScreen({ navigation }) {
   const [title, setTitle] = useState('');
@@ -48,7 +24,7 @@ export default function PublishJobScreen({ navigation }) {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.7,
@@ -158,10 +134,10 @@ export default function PublishJobScreen({ navigation }) {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Título del trabajo</Text>
+          <Text style={styles.label}>Título del trabajo*</Text>
           <TextInput
             style={styles.input}
-            placeholder="Trabajo"
+            placeholder="Ej: Reparación de tubería en cocina"
             value={title}
             onChangeText={setTitle}
             maxLength={100}
@@ -169,7 +145,7 @@ export default function PublishJobScreen({ navigation }) {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Descripción</Text>
+          <Text style={styles.label}>Descripción*</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Describe detalladamente el trabajo que necesitas..."
@@ -184,7 +160,7 @@ export default function PublishJobScreen({ navigation }) {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Categoría</Text>
+          <Text style={styles.label}>Categoría*</Text>
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={category}
@@ -192,7 +168,7 @@ export default function PublishJobScreen({ navigation }) {
               style={styles.picker}
             >
               <Picker.Item label="Selecciona una categoría" value="" />
-              {categories.map((cat) => (
+              {CATEGORIES.map((cat) => (
                 <Picker.Item key={cat} label={cat} value={cat} />
               ))}
             </Picker>
@@ -200,7 +176,7 @@ export default function PublishJobScreen({ navigation }) {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Presupuesto estimado</Text>
+          <Text style={styles.label}>Presupuesto estimado*</Text>
           <View style={styles.priceInputContainer}>
             <Text style={styles.currencySymbol}>C$</Text>
             <TextInput
@@ -214,7 +190,7 @@ export default function PublishJobScreen({ navigation }) {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Ubicación</Text>
+          <Text style={styles.label}>Ubicación*</Text>
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={location}
@@ -222,7 +198,7 @@ export default function PublishJobScreen({ navigation }) {
               style={styles.picker}
             >
               <Picker.Item label="Selecciona una ubicación" value="" />
-              {locations.map((loc) => (
+              {LOCATIONS.map((loc) => (
                 <Picker.Item key={loc} label={loc} value={loc} />
               ))}
             </Picker>

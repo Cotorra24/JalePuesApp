@@ -1,19 +1,15 @@
 // src/screens/HomeScreen.js
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
-import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
-import { db } from '../Database/firebaseConfig';
+import { collection, query, orderBy, onSnapshot, where, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../Database/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import JobCard from '../components/JobCard';
+import { CATEGORIES, LOCATIONS } from '../constants/nicaraguaConstants';
 
-const categories = [
+const ALL_CATEGORIES = [
     { id: 'all', name: 'Todos' },
-    { id: 'Plomería', name: 'Plomería' },
-    { id: 'Electricidad', name: 'Electricidad' },
-    { id: 'Limpieza', name: 'Limpieza' },
-    { id: 'Jardinería', name: 'Jardinería' },
-    { id: 'Carpintería', name: 'Carpintería' },
-    { id: 'Pintura', name: 'Pintura' },
+    ...CATEGORIES.map(cat => ({ id: cat, name: cat }))
 ];
 
 export default function HomeScreen({ navigation }) {
@@ -23,7 +19,27 @@ export default function HomeScreen({ navigation }) {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
-    const [location, setLocation] = useState('Chontales, Nicaragua');
+    const [userCategories, setUserCategories] = useState([]);
+    const [location, setLocation] = useState('Managua, Nicaragua');
+
+    // Cargar categorías de interés del usuario
+    useEffect(() => {
+        const loadUserData = async () => {
+            try {
+                const user = auth.currentUser;
+                if (user) {
+                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        setUserCategories(userData.categories || []);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        };
+        loadUserData();
+    }, []);
 
     useEffect(() => {
         const q = query(
@@ -37,8 +53,11 @@ export default function HomeScreen({ navigation }) {
                 id: doc.id,
                 ...doc.data()
             }));
-            setJobs(jobsData);
-            setFilteredJobs(jobsData);
+
+            // Ordenar trabajos por relevancia
+            const sortedJobs = sortJobsByRelevance(jobsData, userCategories);
+            setJobs(sortedJobs);
+            setFilteredJobs(sortedJobs);
             setLoading(false);
             setRefreshing(false);
         }, (error) => {
@@ -48,7 +67,29 @@ export default function HomeScreen({ navigation }) {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [userCategories]);
+
+    // Algoritmo para ordenar trabajos por relevancia
+    const sortJobsByRelevance = (jobsList, userCats) => {
+        if (!userCats || userCats.length === 0) {
+            return jobsList;
+        }
+
+        return jobsList.sort((a, b) => {
+            const aMatch = userCats.includes(a.category) ? 1 : 0;
+            const bMatch = userCats.includes(b.category) ? 1 : 0;
+
+            // Priorizar trabajos que coincidan con categorías de interés
+            if (aMatch !== bMatch) {
+                return bMatch - aMatch;
+            }
+
+            // Si ambos coinciden o no coinciden, ordenar por fecha
+            const aDate = a.createdAt?.toDate?.() || new Date(a.createdAt);
+            const bDate = b.createdAt?.toDate?.() || new Date(b.createdAt);
+            return bDate - aDate;
+        });
+    };
 
     useEffect(() => {
         filterJobs();
@@ -75,24 +116,32 @@ export default function HomeScreen({ navigation }) {
         setRefreshing(true);
     };
 
-    const renderCategoryItem = ({ item }) => (
-        <TouchableOpacity
-            style={[
-                styles.categoryChip,
-                selectedCategory === item.id && styles.categoryChipActive
-            ]}
-            onPress={() => setSelectedCategory(item.id)}
-        >
-            <Text
+    const renderCategoryItem = ({ item }) => {
+        const isRelevant = userCategories.includes(item.id) && item.id !== 'all';
+
+        return (
+            <TouchableOpacity
                 style={[
-                    styles.categoryChipText,
-                    selectedCategory === item.id && styles.categoryChipTextActive
+                    styles.categoryChip,
+                    selectedCategory === item.id && styles.categoryChipActive,
+                    isRelevant && styles.categoryChipRelevant
                 ]}
+                onPress={() => setSelectedCategory(item.id)}
             >
-                {item.name}
-            </Text>
-        </TouchableOpacity>
-    );
+                {isRelevant && (
+                    <Ionicons name="star" size={12} color="#FFA500" style={styles.starIcon} />
+                )}
+                <Text
+                    style={[
+                        styles.categoryChipText,
+                        selectedCategory === item.id && styles.categoryChipTextActive
+                    ]}
+                >
+                    {item.name}
+                </Text>
+            </TouchableOpacity>
+        );
+    };
 
     if (loading) {
         return (
@@ -127,10 +176,19 @@ export default function HomeScreen({ navigation }) {
                 </TouchableOpacity>
             </View>
 
+            {userCategories.length > 0 && (
+                <View style={styles.suggestedBanner}>
+                    <Ionicons name="bulb" size={16} color="#FFA500" />
+                    <Text style={styles.suggestedText}>
+                        Trabajos recomendados según tus intereses ⭐
+                    </Text>
+                </View>
+            )}
+
             <View style={styles.categoriesContainer}>
                 <FlatList
                     horizontal
-                    data={categories}
+                    data={ALL_CATEGORIES}
                     renderItem={renderCategoryItem}
                     keyExtractor={item => item.id}
                     showsHorizontalScrollIndicator={false}
@@ -148,6 +206,7 @@ export default function HomeScreen({ navigation }) {
                     <JobCard
                         job={item}
                         onPress={() => navigation.navigate('JobDetail', { job: item })}
+                        isRecommended={userCategories.includes(item.category)}
                     />
                 )}
                 keyExtractor={item => item.id}
@@ -225,6 +284,24 @@ const styles = StyleSheet.create({
     filterButton: {
         padding: 8,
     },
+    suggestedBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF9E6',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        marginHorizontal: 16,
+        marginBottom: 8,
+        borderRadius: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: '#FFA500',
+    },
+    suggestedText: {
+        fontSize: 13,
+        color: '#F57C00',
+        fontWeight: '600',
+        marginLeft: 8,
+    },
     categoriesContainer: {
         backgroundColor: 'white',
         paddingVertical: 12,
@@ -238,9 +315,15 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         backgroundColor: '#F0F0F0',
         marginRight: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     categoryChipActive: {
         backgroundColor: '#0066CC',
+    },
+    categoryChipRelevant: {
+        borderWidth: 1,
+        borderColor: '#FFA500',
     },
     categoryChipText: {
         fontSize: 14,
@@ -249,6 +332,9 @@ const styles = StyleSheet.create({
     },
     categoryChipTextActive: {
         color: 'white',
+    },
+    starIcon: {
+        marginRight: 4,
     },
     jobCount: {
         fontSize: 14,

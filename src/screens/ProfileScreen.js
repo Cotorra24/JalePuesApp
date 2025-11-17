@@ -94,6 +94,17 @@ export default function ProfileScreen({ navigation }) {
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.menuItem}
+          onPress={() => navigation.navigate('Statistics')}
+        >
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="stats-chart-outline" size={24} color="#333" />
+            <Text style={styles.menuItemText}>Mis Estadísticas</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#999" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
           onPress={() => navigation.navigate('MyPosts')}
         >
           <View style={styles.menuItemLeft}>
